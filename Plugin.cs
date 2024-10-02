@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
@@ -22,6 +22,9 @@ using Photon.Realtime;
 using Gorilla_Quests.Patches;
 using BuildSafe;
 using System.Threading;
+using Unity.Mathematics;
+using static System.Net.WebRequestMethods;
+using System.Text;
 
 namespace Gorilla_Quests
 {
@@ -134,16 +137,17 @@ namespace Gorilla_Quests
 
 
         void Start()
-        {            HarmonyPatches.ApplyHarmonyPatches();
-            if (PlayerPrefs.GetInt("DiscordPopupDismissed", 0) == 1)
-            {
+        {
+            HarmonyPatches.ApplyHarmonyPatches();
+              if (PlayerPrefs.GetInt("DiscordPopupDismissed", 0) == 1)
+             {
                 showPopup = false;
-            }
+              }
 
 
-            float windowWidth = 300;
-            float windowHeight = 150;
-            windowRect = new Rect((Screen.width - windowWidth) / 2, (Screen.height - windowHeight) / 2, windowWidth, windowHeight);
+              float windowWidth = 300;
+               float windowHeight = 150;
+               windowRect = new Rect((Screen.width - windowWidth) / 2, (Screen.height - windowHeight) / 2, windowWidth, windowHeight);
             GorillaTagger.OnPlayerSpawned(playerSpawned);
         }
         void EventReceived(EventData photonEvent)
@@ -207,7 +211,7 @@ namespace Gorilla_Quests
         private IEnumerator CountUpQuestProgress(Quest quest)
         {
             int trueCount = boolProperties.Count(prop => (bool)prop.GetValue(quest));
-            if (trueCount == 1 && quest.Count)
+            if (trueCount == 1 && quest.Count && !quest.IsOnCooldown)
             {
                 if (activeQuests.Contains(quest))
                 {
@@ -220,8 +224,11 @@ namespace Gorilla_Quests
                     IncrementProgress(1, quest);
                     CheckAndStartCountQuest();
                     StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                    UpdateWatchText();
                 }
                 CompleteQuest(quest, DetermineQuestType(quest));
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
                 activeQuests.Remove(quest);
                 SaveAllQuestProgress();
             }
@@ -263,6 +270,149 @@ namespace Gorilla_Quests
             var questWithMap = selectedQuests.FirstOrDefault(quest => quest.Map);
             return (questWithMap != null, questWithMap?.Mapname);
         }
+        private Dictionary<string, string> taskMappings = new Dictionary<string, string>
+        {
+            { "Complete 1 Round Of Infection", "1 Rnd Infec" },
+            { "Join a Lobby", "Join Lobby" },
+            { "Play for 10 Minutes", "Play 10 M" },
+            { "Play Casual Mode", "Play Casual" },
+            { "Play Infection Mode", "Play Infec" },
+            { "Play Hunt Mode", "Play Hunt" },
+            { "Play Forest for 5 Minutes", "For 5 M" },
+            { "Play Forest in Casual Mode", "For Cas." },
+            { "Play Forest in Infection Mode", "For Inf." },
+            { "Play Forest in Hunt Mode", "For Hunt" },
+            { "Play Canyons for 5 Minutes", "Can 5 M" },
+            { "Play Canyons in Casual Mode", "Can Cas." },
+            { "Play Canyons in Infection Mode", "Can Inf." },
+            { "Play Canyons in Hunt Mode", "Can Hunt" },
+            { "Play Mountain for 5 Minutes", "Mtn 5 M" },
+            { "Play Mountain in Casual Mode", "Mtn Casual" },
+            { "Play Mountain in Infection Mode", "Mtn Infec" },
+            { "Play Mountain in Hunt Mode", "Mtn Hunt" },
+            { "Play City for 5 Minutes", "City 5 M" },
+            { "Play City in Casual Mode", "City Cas." },
+            { "Play City in Infection Mode", "City Inf." },
+            { "Play City in Hunt Mode", "City Hunt" },
+            { "Play Beach for 5 Minutes", "Beach 5 M" },
+            { "Play Beach in Casual Mode", "Beach Cas." },
+            { "Play Beach in Infection Mode", "Beach Inf." },
+            { "Play Beach in Hunt Mode", "Beach Hunt" },
+            { "Play Rotation for 5 Minutes", "Rot 5 M" },
+            { "Play Rotation in Casual Mode", "Rot Casual" },
+            { "Play Rotation in Infection Mode", "Rot Infec" },
+            { "Play Rotation in Hunt Mode", "Rot Hunt" },
+            { "Play Basement for 5 Minutes", "Base 5 M" },
+            { "Play Basement in Casual Mode", "Base Cas." },
+            { "Play Basement in Infection Mode", "Base Inf." },
+            { "Play Basement in Hunt Mode", "Base Hunt" },
+            { "Play Metro for 5 Minutes", "Metro 5 M" },
+            { "Play Metro in Casual Mode", "Metro Cas." },
+            { "Play Metro in Infection Mode", "Metro Inf." },
+            { "Play Metro in Hunt Mode", "Metro Hunt" },
+            { "Play for 20 Minutes", "Play 20 M" },
+            { "Complete 2 Rounds of Infection", "2 Rnd Infec" },
+            { "Play Forest for 10 Minutes", "For 10 M" },
+            { "Play Forest in Casual Mode for 10 Minutes", "For Cas 10 M" },
+            { "Play Forest in Infection Mode for 10 Minutes", "For Inf 10 M" },
+            { "Play Forest in Hunt Mode for 10 Minutes", "For Hnt 10 M" },
+            { "Play Canyons for 10 Minutes", "Can 10 M" },
+            { "Play Canyons in Casual Mode for 10 Minutes", "Can Cas 10 M" },
+            { "Play Canyons in Infection Mode for 10 Minutes", "Can Inf 10 M" },
+            { "Play Canyons in Hunt Mode for 10 Minutes", "Can Hnt 10 M" },
+            { "Play Mountain for 10 Minutes", "Mtn 10 M" },
+            { "Play Mountain in Casual Mode for 10 Minutes", "Mtn Cas 10 M" },
+            { "Play Mountain in Infection Mode for 10 Minutes", "Mtn Inf 10 M" },
+            { "Play Mountain in Hunt Mode for 10 Minutes", "Mtn Hnt 10 M" },
+            { "Play City for 10 Minutes", "City 10 M" },
+            { "Play City in Casual Mode for 10 Minutes", "City Cas 10 M" },
+            { "Play City in Infection Mode for 10 Minutes", "City Inf 10 M" },
+            { "Play City in Hunt Mode for 10 Minutes", "City Hnt 10 M" },
+            { "Play Beach for 10 Minutes", "Beach 10 M" },
+            { "Play Beach in Casual Mode for 10 Minutes", "Beach Cas 10 M" },
+            { "Play Beach in Infection Mode for 10 Minutes", "Beach Inf 10 M" },
+            { "Play Beach in Hunt Mode for 10 Minutes", "Beach Hnt 10 M" },
+            { "Play Rotation for 10 Minutes", "Rot 10 M" },
+            { "Play Rotation in Casual Mode for 10 Minutes", "Rot Cas 10 M" },
+            { "Play Rotation in Infection Mode for 10 Minutes", "Rot Inf 10 M" },
+            { "Play Rotation in Hunt Mode for 10 Minutes", "Rot Hnt 10 M" },
+            { "Play Basement for 10 Minutes", "Base 10 M" },
+            { "Play Basement in Casual Mode for 10 Minutes", "Base Cas 10 M" },
+            { "Play Basement in Infection Mode for 10 Minutes", "Base Inf 10 M" },
+            { "Play Basement in Hunt Mode for 10 Minutes", "Base Hnt 10 M" },
+            { "Play Metro for 10 Minutes", "Metro 10 M" },
+            { "Play Metro in Casual Mode for 10 Minutes", "Metro Cas 10 M" },
+            { "Play Metro in Infection Mode for 10 Minutes", "Metro Inf 10 M" },
+            { "Play Metro in Hunt Mode for 10 Minutes", "Metro Hnt 10 M" },
+            { "Complete 5 Rounds Of Infection", "5 Rnd Infec" },
+            { "Play for 30 Minutes", "Play 30 M" },
+            { "Play Forest for 15 Minutes", "For 15 M" },
+            { "Play Forest in Casual Mode for 15 Minutes", "For Cas 15 M" },
+            { "Play Forest in Infection Mode for 15 Minutes", "For Inf 15 M" },
+            { "Play Forest in Hunt Mode for 15 Minutes", "For Hnt 15 M" },
+            { "Play Canyons for 15 Minutes", "Can 15 M" },
+            { "Play Canyons in Casual Mode for 15 Minutes", "Can Cas 15 M" },
+            { "Play Canyons in Infection Mode for 15 Minutes", "Can Inf 15 M" },
+            { "Play Canyons in Hunt Mode for 15 Minutes", "Can Hnt 15 M" },
+            { "Play Mountain for 15 Minutes", "Mtn 15 M" },
+            { "Play Mountain in Casual Mode for 15 Minutes", "Mtn Cas 15 M" },
+            { "Play Mountain in Infection Mode for 15 Minutes", "Mtn Inf 15 M" },
+            { "Play Mountain in Hunt Mode for 15 Minutes", "Mtn Hnt 15 M" },
+            { "Play City for 15 Minutes", "City 15 M" },
+            { "Play City in Casual Mode for 15 Minutes", "City Cas 15 M" },
+            { "Play City in Infection Mode for 15 Minutes", "City Inf 15 M" },
+            { "Play City in Hunt Mode for 15 Minutes", "City Hnt 15 M" },
+            { "Play Beach for 15 Minutes", "Beach 15 M" },
+            { "Play Beach in Casual Mode for 15 Minutes", "Beach Cas 15 M" },
+            { "Play Beach in Infection Mode for 15 Minutes", "Beach Inf 15 M" },
+            { "Play Beach in Hunt Mode for 15 Minutes", "Beach Hnt 15 M" },
+            { "Play Rotation for 15 Minutes", "Rot 15 M" },
+            { "Play Rotation in Casual Mode for 15 Minutes", "Rot Cas 15 M" },
+            { "Play Rotation in Infection Mode for 15 Minutes", "Rot Inf 15 M" },
+            { "Play Rotation in Hunt Mode for 15 Minutes", "Rot Hnt 15 M" },
+            { "Play Basement for 15 Minutes", "Base 15 M" },
+            { "Play Basement in Casual Mode for 15 Minutes", "Base Cas 15 M" },
+            { "Play Basement in Infection Mode for 15 Minutes", "Base Inf 15 M" },
+            { "Play Basement in Hunt Mode for 15 Minutes", "Base Hnt 15 M" },
+            { "Play Metro for 15 Minutes", "Metro 15 M" },
+            { "Play Metro in Casual Mode for 15 Minutes", "Metro Cas 15 M" },
+            { "Play Metro in Infection Mode for 15 Minutes", "Metro Inf 15 M" },
+            { "Play Metro in Hunt Mode for 15 Minutes", "Metro Hnt 15 M" },
+            { "Play for 60 Minutes", "Play 60 M" },
+            { "Complete 10 Rounds Of Infection", "10 Rnd Infec" },
+            { "Play Forest for 30 Minutes", "For 30 M" },
+            { "Play Forest in Casual Mode for 30 Minutes", "For Cas 30 M" },
+            { "Play Forest in Infection Mode for 30 Minutes", "For Inf 30 M" },
+            { "Play Forest in Hunt Mode for 30 Minutes", "For Hnt 30 M" },
+            { "Play Canyons for 30 Minutes", "Can 30 M" },
+            { "Play Canyons in Casual Mode for 30 Minutes", "Can Cas 30 M" },
+            { "Play Canyons in Infection Mode for 30 Minutes", "Can Inf 30 M" },
+            { "Play Canyons in Hunt Mode for 30 Minutes", "Can Hnt 30 M" },
+            { "Play Mountain for 30 Minutes", "Mtn 30 M" },
+            { "Play Mountain in Casual Mode for 30 Minutes", "Mtn Cas 30 M" },
+            { "Play Mountain in Infection Mode for 30 Minutes", "Mtn Inf 30 M" },
+            { "Play Mountain in Hunt Mode for 30 Minutes", "Mtn Hnt 30 M" },
+            { "Play City for 30 Minutes", "City 30 M" },
+            { "Play City in Casual Mode for 30 Minutes", "City Cas 30 M" },
+            { "Play City in Infection Mode for 30 Minutes", "City Inf 30 M" },
+            { "Play City in Hunt Mode for 30 Minutes", "City Hnt 30 M" },
+            { "Play Beach for 30 Minutes", "Beach 30 M" },
+            { "Play Beach in Casual Mode for 30 Minutes", "Beach Cas 30 M" },
+            { "Play Beach in Infection Mode for 30 Minutes", "Beach Inf 30 M" },
+            { "Play Beach in Hunt Mode for 30 Minutes", "Beach Hnt 30 M" },
+            { "Play Rotation for 30 Minutes", "Rot 30 M" },
+            { "Play Rotation in Casual Mode for 30 Minutes", "Rot Cas 30 M" },
+            { "Play Rotation in Infection Mode for 30 Minutes", "Rot Inf 30 M" },
+            { "Play Rotation in Hunt Mode for 30 Minutes", "Rot Hnt 30 M" },
+            { "Play Basement for 30 Minutes", "Base 30 M" },
+            { "Play Basement in Casual Mode for 30 Minutes", "Base Cas 30 M" },
+            { "Play Basement in Infection Mode for 30 Minutes", "Base Inf 30 M" },
+            { "Play Basement in Hunt Mode for 30 Minutes", "Base Hnt 30 M" },
+            { "Play Metro for 30 Minutes", "Metro 30 M" },
+            { "Play Metro in Casual Mode for 30 Minutes", "Metro Cas 30 M" },
+            { "Play Metro in Infection Mode for 30 Minutes", "Metro Inf 30 M" },
+            { "Play Metro in Hunt Mode for 30 Minutes", "Metro Hnt 30 M" },
+        };
         string FormatMap(string map)// tehee wryser not stolen code
         {
             string formattedmap;
@@ -271,6 +421,9 @@ namespace Gorilla_Quests
                 case "CANYON":
                     formattedmap = "CANYONS";
                     break;
+                case "CITYWITHSKYJUNGLE":
+                    formattedmap = "CITY";
+                    break;
                 case "CAVE":
                     formattedmap = "CAVES";
                     break;
@@ -278,7 +431,6 @@ namespace Gorilla_Quests
                     formattedmap = "ROTATING";
                     break;
                 default:
-                    Debug.Log(map);
                     formattedmap = map;
                     break;
             }
@@ -294,9 +446,48 @@ namespace Gorilla_Quests
             var currentqueuestring = GorillaComputer.instance.currentQueue;
             return currentqueuestring;
         }
+        private float timeSpentInMap = 0f;
+        private float timeCheckInterval = 60f;
+        private Coroutine timeTrackingCoroutine;
         private PropertyInfo[] boolProperties = typeof(Quest).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(prop => prop.PropertyType == typeof(bool))
             .ToArray();
+        private IEnumerator TrackTimeInMap(Quest quest)
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(1f);
+                if (quest.Map)
+                {
+                    string mapName = quest.Mapname.ToUpper();
+                    string currentMap = FormatMap(MapPatch.ActiveZones.First().ToString().ToUpper());
+                    if (mapName.Equals(currentMap, StringComparison.OrdinalIgnoreCase))
+                    {
+                        timeSpentInMap += 1f;
+                        Debug.Log($"Time spent in quest map '{mapName}': {timeSpentInMap} seconds");
+                        if (timeSpentInMap >= timeCheckInterval)
+                        {
+                            IncrementProgress(1, quest);
+                            if (PhotonNetwork.CurrentRoom.PlayerCount < 3)
+                            {
+                                CompleteQuest(quest, DetermineQuestType(quest));
+                                Debug.Log($"Quest completed due to player count < 3: {quest.Name}");
+                            }
+                            timeSpentInMap = 0f;
+                        }
+                    }
+                    else
+                    {
+                        timeSpentInMap = 0f;
+                        Debug.Log($"Exited quest map. Time tracking reset for '{mapName}'.");
+                    }
+                }
+                else
+                {
+                    Debug.LogError("Quest does not require a specific map.");
+                }
+            }
+        }
         private void OnRoomJoin(string roomName)
         {
             // LastInRound();
@@ -313,8 +504,6 @@ namespace Gorilla_Quests
 
             if (questsWithRoomTrigger.Any())
             {
-                Debug.Log("Has quests with room triggers");
-
                 foreach (var quest in questsWithRoomTrigger)
                 {
 
@@ -326,6 +515,7 @@ namespace Gorilla_Quests
                         Debug.Log(quest);
                         IncrementProgress(1, quest);
                         StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                        UpdateWatchText();
                     }
                     if (quest.Map)
                     {
@@ -337,6 +527,7 @@ namespace Gorilla_Quests
                             {
                                 IncrementProgress(1, quest);
                                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                                UpdateWatchText();
                                 print($"In Map {mapName} or {map}");
                             }
                             Debug.Log($"This quest requires the map: {mapName}");
@@ -348,18 +539,59 @@ namespace Gorilla_Quests
                     }
                     if (quest.Count)
                     {
-                        Debug.Log("This quest requires a count.");
+                        int progressIncrement = 0;
+                        if (quest.Map && quest.Gamemode)
+                        {
+                            string requiredGamemode = quest.GamemodeName.ToUpper();
+                            string currentGamemode = GetCurrentGamemode();
+
+                            string mapName = quest.Mapname.ToUpper();
+                            string currentMap2 = FormatMap(MapPatch.ActiveZones.First().ToString().ToUpper());
+
+                            if (mapName.Equals(currentMap2, StringComparison.OrdinalIgnoreCase) &&
+                                requiredGamemode.Equals(currentGamemode, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (timeTrackingCoroutine == null)
+                                {
+                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest));
+                                }
+                                Debug.Log($"Both map and gamemode requirements met for quest: {quest.Name}");
+                            }
+                            else
+                            {
+                                Debug.Log($"Quest requirements not met. Required Map: {mapName}, Required Gamemode: {requiredGamemode}. Current Map: {currentMap}, Current Gamemode: {currentGamemode}.");
+                            }
+                        }
+                        else if (quest.Map)
+                        {
+                            string mapName = quest.Mapname.ToUpper();
+                            string currentMap3 = FormatMap(MapPatch.ActiveZones.First().ToString().ToUpper());
+
+                            if (mapName.Equals(currentMap3, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (timeTrackingCoroutine == null)
+                                {
+                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest));
+                                }
+                                Debug.Log($"Map requirement met for quest: {quest.Name}");
+                            }
+                            else
+                            {
+                                Debug.Log($"This quest requires a different map: {mapName}. Current map: {currentMap}.");
+                            }
+                        }
                     }
                     if (quest.Gamemode)
                     {
                         string requiredGamemode = quest.GamemodeName.ToUpper(); ;
                         if (!string.IsNullOrEmpty(requiredGamemode))
                         {
-                            string currentGamemode = GetCurrentGamemode(); 
+                            string currentGamemode = GetCurrentGamemode();
                             if (requiredGamemode.Equals(currentGamemode, StringComparison.OrdinalIgnoreCase))
                             {
                                 IncrementProgress(1, quest);
                                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                                UpdateWatchText();
                             }
                             else
                             {
@@ -382,6 +614,7 @@ namespace Gorilla_Quests
                         {
                             IncrementProgress(1, quest);
                             StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                            UpdateWatchText();
                             Debug.Log($"Current queue matches the quest requirement: {quest.QueueName.ToUpper()}");
                         }
                         else
@@ -437,9 +670,9 @@ namespace Gorilla_Quests
             }
         }
         private bool endofround = false;
-      
+
         private int _streak;
-        
+
 
         private void OnStreakChanged()
         {
@@ -453,7 +686,8 @@ namespace Gorilla_Quests
                 Debug.Log("True 1");
 
                 foreach (var quest in selectedQuests)
-                {           var questsToCheck = new List<(string questName, int requiredStreak)>
+                {
+                    var questsToCheck = new List<(string questName, int requiredStreak)>
             {
                 ("Be last for 1 Game of Infection", 1),
                 ("Be last 2 Rounds in a Row in Infection", 2),
@@ -474,6 +708,7 @@ namespace Gorilla_Quests
             {
                 SetProgress(quest, streakIncrement);
                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
             }
         }
 
@@ -481,7 +716,7 @@ namespace Gorilla_Quests
         private int RoundsCompleted;
         void Update()
         {
-
+            WatchUpdatingInput();
             if (PhotonNetwork.InRoom && GetCurrentGamemode() == "INFECTION")
             {
                 CheckTagListChanges();
@@ -516,10 +751,10 @@ namespace Gorilla_Quests
                     }
                 }
             }
-           /* if (PhotonNetwork.InRoom)
-            {
-                
-            }*/// CompleteQuest(selectedQuests.FirstOrDefault(q => q.Name == "Join a Lobby"), DetermineQuestType(selectedQuests.FirstOrDefault(q => q.Name == "Join a Lobby")));
+            /* if (PhotonNetwork.InRoom)
+             {
+
+             }*/// CompleteQuest(selectedQuests.FirstOrDefault(q => q.Name == "Join a Lobby"), DetermineQuestType(selectedQuests.FirstOrDefault(q => q.Name == "Join a Lobby")));
             if (PhotonNetwork.InRoom && !Debounce)
             {
                 Debounce = true;
@@ -530,6 +765,12 @@ namespace Gorilla_Quests
             {
                 Debounce = false;
                 JoinedRoom = false;
+                if (timeTrackingCoroutine != null)
+                {
+                    StopCoroutine(timeTrackingCoroutine);
+                    timeTrackingCoroutine = null;
+                }
+
             }
         }
         private void InitializeQuests()
@@ -538,197 +779,256 @@ namespace Gorilla_Quests
             quests.Add(new Quest("Play for 5 Minutes", 5, 5, true, false, false, null, false, null, false, null, QuestTypeCooldown.Normal)); // done
             quests.Add(new Quest("Complete 1 Round Of Infection", 1, 15, false, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Normal));// done
             quests.Add(new Quest("Join a Lobby", 1, 5, false, true, false, null, false, null, false, null, QuestTypeCooldown.Normal)); // done
-                                                                                                                                       // quests.Add(new Quest("Tag 2 Players", 2, 20)); // commented out
             quests.Add(new Quest("Play for 10 Minutes", 10, 10, true, false, false, null, false, null, false, null, QuestTypeCooldown.Normal)); // done
             quests.Add(new Quest("Play Casual Mode", 1, 5, false, true, true, "Casual", false, null, false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Infection Mode", 1, 5, false, false, true, "Infection", false, null, false, null, QuestTypeCooldown.Normal));// done
+            quests.Add(new Quest("Play Infection Mode", 1, 5, false, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Normal));// done
             quests.Add(new Quest("Play Hunt Mode", 1, 5, false, true, true, "Hunt", false, null, false, null, QuestTypeCooldown.Normal));// done
-            //quests.Add(new Quest("Join a Game Code", 1, 5, false, true, false, null, false, null, false, null, QuestTypeCooldown.Normal));
-
-            // Map-based quests (map is true, mapname must be provided)
-            quests.Add(new Quest("Play Forest", 1, 10, false, true, false, null, true, "Forest", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Canyons", 1, 10, false, true, false, null, true, "Canyons", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Mountains", 1, 10, false, true, false, null, true, "Mountains", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play City", 1, 10, false, true, false, null, true, "City", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Beach", 1, 10, false, true, false, null, true, "Beach", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Rotation", 1, 10, false, true, false, null, true, "Rotation", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Basement", 1, 10, false, true, false, null, true, "Basement", false, null, QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Play Metro", 1, 10, false, true, false, null, true, "Metro", false, null, QuestTypeCooldown.Normal));// done
-
             quests.Add(new Quest("Play Competitive Queue", 1, 20, false, true, false, null, false, null, true, "Competitive", QuestTypeCooldown.Normal));// done
             quests.Add(new Quest("Play Default Queue", 1, 10, false, true, false, null, false, null, true, "Default", QuestTypeCooldown.Normal));// done
             quests.Add(new Quest("Play Minigames Queue", 1, 10, false, true, false, null, false, null, true, "Minigames", QuestTypeCooldown.Normal));// done
-            quests.Add(new Quest("Be last for 1 Game of Infection", 1, 20, false, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Normal));// done
+                                                                                                                                                     // Map-based quests (map is true, mapname must be provided)
+            string[] maps = { "Forest", "Canyons", "Mountain", "City", "Beach", "Rotation", "Basement", "Metro" };
+            string[] gameModes = { "Casual", "Infection", "Hunt" };
+
+            foreach (string map in maps)
+            {
+                quests.Add(new Quest($"Play {map} for 5 Minutes", 5, 10, true, true, false, null, true, map, false, null, QuestTypeCooldown.Normal));
+                foreach (string mode in gameModes)
+                {
+                    quests.Add(new Quest($"Play {map} in {mode} Mode", 5, 15, true, true, true, mode, true, map, false, null, QuestTypeCooldown.Normal));
+                }
+            }
 
             //---------------------Advanced Quests---------------------
             advancedQuests.Add(new Quest("Play for 20 Minutes", 20, 20, true, false, false, null, false, null, false, null, QuestTypeCooldown.Advanced)); // done
             advancedQuests.Add(new Quest("Complete 2 Rounds of Infection", 2, 25, false, false, false, null, false, null, false, null, QuestTypeCooldown.Advanced));// done
-            advancedQuests.Add(new Quest("Be last 2 Rounds in a Row in Infection", 2, 40, false, false, false, null, false, null, false, null, QuestTypeCooldown.Advanced));// done
-           // advancedQuests.Add(new Quest("Avoid Being Tagged for 2 Minutes in Infection", 2, 35, true, false, false, null, false, null, false, null, QuestTypeCooldown.Advanced));
-            //advancedQuests.Add(new Quest("Play Infection Mode for 20 Minutes", 20, 25, true, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Advanced));
 
-            //---------------------Expert Quests-----------------------
+            foreach (string map in maps)
+            {
+                advancedQuests.Add(new Quest($"Play {map} for 10 Minutes", 10, 30, true, true, false, null, true, map, false, null, QuestTypeCooldown.Advanced));
+
+                foreach (string mode in gameModes)
+                {
+                    advancedQuests.Add(new Quest($"Play {map} in {mode} Mode for 10 Minutes", 15, 65, true, true, true, mode, true, map, false, null, QuestTypeCooldown.Advanced));
+                }
+            }
+
+            //---------------------Expert Quests---------------------
             expertQuests.Add(new Quest("Complete 5 Rounds Of Infection", 5, 50, false, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Expert));// done
             expertQuests.Add(new Quest("Play for 30 Minutes", 30, 50, true, false, false, null, false, null, false, null, QuestTypeCooldown.Expert)); // done
-            expertQuests.Add(new Quest("Play for 60 Minutes", 60, 120, true, false, false, null, false, null, false, null, QuestTypeCooldown.Expert)); // done
-           // expertQuests.Add(new Quest("Avoid Being Tagged for 6 Minutes In Infection", 6, 35, true, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Expert));
-            expertQuests.Add(new Quest("Be last 3 Rounds in a Row In Infection", 3, 80, false, true, true, "Infection", false, null, false, null, QuestTypeCooldown.Expert));// done
-        }
-        private bool showPopup = true;
-        private Rect windowRect;
-        private Vector2 originalButtonSize = new Vector2(100, 40);
-        private Vector2 clickedButtonSize;
-        void OnGUI()
-        {
-            if (showPopup)
+
+            foreach (string map in maps)
             {
-                float windowWidth = 300;
-                float windowHeight = 200;
-                windowRect = new Rect((Screen.width - windowWidth) / 2, (Screen.height - windowHeight) / 2, windowWidth, windowHeight);
+                expertQuests.Add(new Quest($"Play {map} for 15 Minutes", 15, 70, true, true, false, null, true, map, false, null, QuestTypeCooldown.Expert));
 
-                labelStyle = new GUIStyle(GUI.skin.label)
+                foreach (string mode in gameModes)
                 {
-                    fontSize = 16,
-                    normal = { textColor = new Color(1f, 0.84f, 0f) },
-                    fontStyle = FontStyle.Bold
-                };
-
-                buttonStyle = new GUIStyle(GUI.skin.button)
-                {
-                    fontSize = 14,
-                    normal = { background = MakeTex(2, 2, new Color(0.8f, 0.6f, 0f)) },
-                    hover = { background = MakeTex(2, 2, new Color(0.6f, 0.4f, 0f)) }, 
-                    active = { background = MakeTex(2, 2, new Color(0.5f, 0.3f, 0f)) }, 
-                    fontStyle = FontStyle.Bold
-                };
-
-                GUIStyle boxStyle = new GUIStyle(GUI.skin.box);
-                boxStyle.normal.background = new Texture2D(1, 1);
-                boxStyle.normal.background.SetPixel(0, 0, new Color(0.5f, 0.5f, 0f));
-                boxStyle.normal.background.Apply();
-
-                GUILayout.BeginArea(windowRect);
-                GUI.Box(new Rect(0, 0, windowWidth, windowHeight), "", boxStyle);
-
-                GUILayout.Label("Join the Gorilla Quest's Discord to stay updated!", labelStyle);
-
-                if (GUILayout.Button("Join", buttonStyle, GUILayout.Height(50)))
-                {
-                    Application.OpenURL("https://discord.gg/39fFSURGFQ");
+                    expertQuests.Add(new Quest($"Play {map} in {mode} Mode for 15 Minutes", 15, 120, true, true, true, mode, true, map, false, null, QuestTypeCooldown.Expert));
                 }
-
-                if (GUILayout.Button("Dismiss", buttonStyle, GUILayout.Height(50)))
-                {
-                    PlayerPrefs.SetInt("DiscordPopupDismissed", 1);
-                    PlayerPrefs.Save();
-                    showPopup = false;
-                }
-
-                GUILayout.EndArea();
             }
         }
+        
 
-        private Texture2D MakeTex(int width, int height, Color col)
+                private bool showPopup = true;
+                private Rect windowRect;
+                private Vector2 originalButtonSize = new Vector2(100, 40);
+                private Vector2 clickedButtonSize;
+                void OnGUI()
+                {
+                    if (showPopup)
+                    {
+                        float windowWidth = 300;
+                        float windowHeight = 200;
+                        windowRect = new Rect((Screen.width - windowWidth) / 2, (Screen.height - windowHeight) / 2, windowWidth, windowHeight);
+
+                        labelStyle = new GUIStyle(GUI.skin.label)
+                        {
+                            fontSize = 16,
+                            normal = { textColor = new Color(1f, 0.84f, 0f) },
+                            fontStyle = FontStyle.Bold
+                        };
+
+                        buttonStyle = new GUIStyle(GUI.skin.button)
+                        {
+                            fontSize = 14,
+                            normal = { background = MakeTex(2, 2, new Color(0.8f, 0.6f, 0f)) },
+                            hover = { background = MakeTex(2, 2, new Color(0.6f, 0.4f, 0f)) }, 
+                            active = { background = MakeTex(2, 2, new Color(0.5f, 0.3f, 0f)) }, 
+                            fontStyle = FontStyle.Bold
+                        };
+
+                        GUIStyle boxStyle = new GUIStyle(GUI.skin.box);
+                        boxStyle.normal.background = new Texture2D(1, 1);
+                        boxStyle.normal.background.SetPixel(0, 0, new Color(0.5f, 0.5f, 0f));
+                        boxStyle.normal.background.Apply();
+
+                        GUILayout.BeginArea(windowRect);
+                        GUI.Box(new Rect(0, 0, windowWidth, windowHeight), "", boxStyle);
+
+                        GUILayout.Label("Join the Gorilla Quest's Discord to stay updated! -Tox", labelStyle);
+
+                        if (GUILayout.Button("Join", buttonStyle, GUILayout.Height(50)))
+                        {
+                            Application.OpenURL("https://discord.gg/39fFSURGFQ");
+                        }
+
+                        if (GUILayout.Button("Dismiss", buttonStyle, GUILayout.Height(50)))
+                        {
+                            PlayerPrefs.SetInt("DiscordPopupDismissed", 1);
+                            PlayerPrefs.Save();
+                            showPopup = false;
+                        }
+
+                        GUILayout.EndArea();
+                    }
+                }
+
+                private Texture2D MakeTex(int width, int height, Color col)
+                {
+                    Color[] pix = new Color[width * height];
+                    for (int i = 0; i < pix.Length; i++)
+                    {
+                        pix[i] = col;
+                    }
+                    Texture2D result = new Texture2D(width, height);
+                    result.SetPixels(pix);
+                    result.Apply();
+                    return result;
+                }
+        /*void OnGUI()
         {
-            Color[] pix = new Color[width * height];
-            for (int i = 0; i < pix.Length; i++)
+            GUILayout.BeginArea(new Rect(10, 10, 200, Screen.height));
+            foreach (var quest in selectedQuests)
             {
-                pix[i] = col;
+                if (GUILayout.Button($"Complete {quest.Name}"))
+                {
+                    try
+                    {
+                        CompleteQuest(quest, DetermineQuestType(quest));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Error completing quest {quest.Name}: {ex.Message}");
+                    }
+                }
             }
-            Texture2D result = new Texture2D(width, height);
-            result.SetPixels(pix);
-            result.Apply();
-            return result;
-        }
-        /* void OnGUI()
-         {
-             GUILayout.BeginArea(new Rect(10, 10, 200, 300));
- /*            foreach (var quest in selectedQuests)
-             {
-                 if (GUILayout.Button($"Complete {quest.Name}"))
-                 {
-                     CompleteQuest(quest, DetermineQuestType(quest));
-                 }
-             }
-             if (GUILayout.Button($"Add Streak"))
-             {
-                 Streak++;
-                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
-             }
-             if (GUILayout.Button($"Reset Streak"))
-             {
-                 Streak = 0;
-                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
-             }
-             if (GUILayout.Button("Reroll Quests"))
-             {
-                 SelectRandomQuests();
-                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
-                 CheckAndStartCountQuest();
-             }
-             if (GUILayout.Button("Save Quests"))
-             {
-                 SaveAllQuestProgress();
-             }
-             if (GUILayout.Button("Load Quests"))
-             {
-                 LoadQuestProgress();
-                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
-             }
-             if (GUILayout.Button("Leave Room"))
-             {
-                 PhotonNetwork.Disconnect();
-             }
-             GUILayout.EndArea();
-         }*/
+            if (GUILayout.Button($"Add Streak"))
+            {
+                Streak++;
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
+            }
+            if (GUILayout.Button($"Reset Streak"))
+            {
+                Streak = 0;
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
+            }
+            if (GUILayout.Button("Reroll Quests"))
+            {
+                SelectRandomQuests();
+                CheckAndStartCountQuest();
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
+
+            }
+            if (GUILayout.Button("Save Quests"))
+            {
+                SaveAllQuestProgress();
+            }
+            if (GUILayout.Button("Load Quests"))
+            {
+                LoadQuestProgress();
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
+            }
+            if (PhotonNetwork.InRoom)
+            {
+                if (GUILayout.Button("Leave Room"))
+                {
+                    PhotonNetwork.Disconnect();
+                }
+            }
+            if (GUILayout.Button("Next Page"))
+            {
+                page++;
+                if (page > 3)
+                {
+                    page = 1;
+                }
+                UpdateWatchText();
+            }
+            if (GUILayout.Button("Back Page"))
+            {
+                page--;
+
+                if (page < 1)
+                {
+                    page = 3;
+                }
+                UpdateWatchText();
+            }
+            GUILayout.Label(FormatMap(MapPatch.ActiveZones.First().ToString().ToUpper()));
+            GUILayout.EndArea();
+        }*/
 
 
 
         void SelectRandomQuest(Quest completedQuest, QuestType questType)
+        {
+            if (selectedQuests.Contains(completedQuest))
             {
-                if (selectedQuests.Contains(completedQuest))
+                selectedQuests.Remove(completedQuest);
+                Quest newQuest = null;
+                switch (questType)
                 {
-                    selectedQuests.Remove(completedQuest);
-                    Quest newQuest = null;
+                    case QuestType.Normal:
+                        newQuest = SelectWeightedQuest(questWeights, quests);
+                        break;
 
-                    switch (questType)
-                    {
-                        case QuestType.Normal:
-                            newQuest = quests.OrderBy(q => Guid.NewGuid()).FirstOrDefault();
-                            if (newQuest != null)
-                            {
-                                selectedQuests.Add(newQuest);
-                                Debug.Log($"New Quest Added: {newQuest.Name}");
-                            }
-                            break;
+                    case QuestType.Advanced:
+                        newQuest = SelectWeightedQuest(advancedQuestWeights, advancedQuests);
+                        break;
 
-                        case QuestType.Advanced:
-                            newQuest = advancedQuests.OrderBy(q => Guid.NewGuid()).FirstOrDefault();
-                            if (newQuest != null)
-                            {
-                                selectedQuests.Add(newQuest);
-                                Debug.Log($"New Advanced Quest Added: {newQuest.Name}");
-                            }
-                            break;
+                    case QuestType.Expert:
+                        newQuest = SelectWeightedQuest(expertQuestWeights, expertQuests);
+                        break;
 
-                        case QuestType.Expert:
-                            newQuest = expertQuests.OrderBy(q => Guid.NewGuid()).FirstOrDefault();
-                            if (newQuest != null)
-                            {
-                                selectedQuests.Add(newQuest);
-                                Debug.Log($"New Expert Quest Added: {newQuest.Name}");
-                            }
-                            break;
-
-                        default:
-                            Debug.LogWarning("Invalid quest type specified.");
-                            break;
-                    }
-
-                    StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                    default:
+                        Debug.LogWarning("Invalid quest type specified.");
+                        break;
                 }
-           
+
+                if (newQuest != null && !selectedQuests.Contains(newQuest))
+                {
+                    selectedQuests.Add(newQuest);
+                    Debug.Log($"New Quest Added: {newQuest.Name}");
+                }
+
+                StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
+            }
         }
+
+        System.Random random = new System.Random();
+        private Quest SelectWeightedQuest(Dictionary<Quest, int> questWeightDict, List<Quest> questList)
+        {
+            int totalWeight = questList.Sum(q => questWeightDict[q]);
+            int randomNumber = random.Next(0, totalWeight);
+            int cumulativeWeight = 0;
+
+            foreach (var quest in questList)
+            {
+                cumulativeWeight += questWeightDict[quest];
+                if (randomNumber < cumulativeWeight)
+                {
+                    return quest;
+                }
+            }
+
+            return null;
+        }
+
         private GUIStyle labelStyle;
         private GUIStyle buttonStyle;
         private GUIStyle windowStyle;
@@ -834,6 +1134,7 @@ namespace Gorilla_Quests
             while (quest.IsOnCooldown)
             {
                 StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+                UpdateWatchText();
                 yield return new WaitForSeconds(1f);
             }
         }
@@ -842,11 +1143,13 @@ namespace Gorilla_Quests
         {
             CompleteQuestVFX((int)questType);
             StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+            UpdateWatchText();
 
             DateTime cooldownExpiration = quest.LastPickedUpTime + quest.CooldownDuration;
             yield return new WaitUntil(() => DateTime.Now >= cooldownExpiration);
-
-            quest.IsOnCooldown = false;;
+            StartCoroutine(SetupMOTDWithDelay("Gorilla Quests"));
+            UpdateWatchText();
+            quest.IsOnCooldown = false; ;
             selectedQuests[index] = GetRandomQuest(DetermineQuestTypeList(quest), selectedQuests);
             GorillaTagger.Instance.offlineVRRig.tagSound.PlayOneShot(completeeasy);
             CheckAndStartCountQuest();
@@ -1017,7 +1320,6 @@ namespace Gorilla_Quests
         private GameObject advanceParticle;
         private GameObject expertParticle;
 
-
         void CompleteQuestVFX(int quest_type)
         {
             switch (quest_type)
@@ -1051,11 +1353,156 @@ namespace Gorilla_Quests
         private AudioClip completeharder;
         private void CheckAndStartCountQuest()
         {
-            var questsWithCount = selectedQuests.Where(q => q.Count).ToList();
-
-            foreach (var quest in questsWithCount)
+            try
             {
-                StartCoroutine(CountUpQuestProgress(quest));
+                var questsWithCount = selectedQuests.Where(q =>
+                {
+                    if (q == null)
+                    {
+                        Debug.LogWarning("Encountered a null quest in selectedQuests.");
+                        return false;
+                    }
+
+
+                    return q.Count;
+                }).ToList();
+
+                foreach (var quest in questsWithCount)
+                {
+                    if (quest != null)
+                    {
+                        StartCoroutine(CountUpQuestProgress(quest));
+                    }
+                    else
+                    {
+                        Debug.LogWarning("Attempted to start a coroutine for a null quest.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"An error occurred in CheckAndStartCountQuest: {ex.Message}");
+            }
+        }
+        void UpdateWatchText()
+        {
+            Page1 = GenerateQuestDisplay("Normal Quests", QuestTypeCooldown.Normal, "yellow");
+            Page2 = GenerateQuestDisplay("Advanced Quests", QuestTypeCooldown.Advanced, "red");
+            Page3 = GenerateQuestDisplay("Expert Quests", QuestTypeCooldown.Expert, "purple");
+            if (page == 1)
+            {
+                GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().text.text = Page1;
+            }
+            if (page == 2)
+            {
+                GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().text.text = Page2;
+            }
+            if (page == 3)
+            {
+                GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().text.text = Page3;
+            }
+
+        }
+
+        private string GenerateQuestDisplay(string title, QuestTypeCooldown questType, string color)
+        {
+            var quests = selectedQuests
+                .Where(q => q.Type == questType)
+                .Take(3)
+                .ToList();
+
+            StringBuilder questDisplay = new StringBuilder($"{title}\n<color={color}>");
+
+            if (quests.Count > 0)
+            {
+                foreach (var quest in quests)
+                {
+                    if (taskMappings.TryGetValue(quest.Name, out string output))
+                    {
+                        questDisplay.Append($"{output} {quest.Progress}/{quest.Goal}\n");
+                    }
+                }
+            }
+            else
+            {
+                questDisplay.Append("No quest rn\n");
+            }
+            if (questType == QuestTypeCooldown.Expert)
+            {
+                questDisplay.Append($"</color>Page: {page}/3\nXP: {totalXP}");
+            }
+            else { 
+                questDisplay.Append($"</color>Page: {page}/3");
+             }
+            return questDisplay.ToString();
+        }
+
+        private string ColorToHex(Color color)
+        {
+            return ColorUtility.ToHtmlStringRGB(color);
+        }
+        private string Page1;
+        private string Page2;
+        private string Page3;
+        private int page = 1;
+        void SetupWatch()
+        {
+            GorillaTagger.Instance.offlineVRRig.EnableHuntWatch(true);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().enabled = false;
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().badge.gameObject.SetActive(false);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().leftHand.gameObject.SetActive(false);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().rightHand.gameObject.SetActive(false);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().hat.gameObject.SetActive(false);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().face.gameObject.SetActive(false);
+            GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>().material.gameObject.SetActive(false);
+            var huntComputer = GorillaTagger.Instance.offlineVRRig.huntComputer.GetComponent<GorillaHuntComputer>();
+            huntComputer.text.alignment = TextAnchor.MiddleLeft;
+            huntComputer.text.fontSize = 14;
+            huntComputer.text.verticalOverflow = VerticalWrapMode.Overflow;
+            huntComputer.text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            huntComputer.text.alignByGeometry = true;
+            huntComputer.text.resizeTextForBestFit = false;
+            huntComputer.text.resizeTextMinSize = 10;
+            huntComputer.text.resizeTextMaxSize = 14;
+            if (page == 1) 
+            {
+                huntComputer.text.text = Page1;
+            }
+            if (page == 2)
+            {
+                huntComputer.text.text = Page2;
+            }
+            if (page == 3)
+            {
+                huntComputer.text.text = Page3;
+            }
+        }
+        public static float PageCoolDown;
+        void WatchUpdatingInput()
+        {
+            if (ControllerInputPoller.instance.leftControllerSecondaryButton && Time.time > PageCoolDown + 0.5)
+            {
+                PageCoolDown = Time.time;
+                page++;
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(67, true, 1f);
+                UpdateWatchText();
+            }
+            if (ControllerInputPoller.instance.leftControllerPrimaryButton && Time.time > PageCoolDown + 0.5f)
+            {
+                PageCoolDown = Time.time;
+                page--;
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(67, true, 1f);
+                UpdateWatchText();
+            }
+            if (page > 3)
+            {
+                page = 1;
+                UpdateWatchText();
+            }
+            if (page < 1)
+            {
+                page = 3;
+                UpdateWatchText();
             }
         }
         [Obsolete]
@@ -1070,6 +1517,9 @@ namespace Gorilla_Quests
                 }
             }
             InitializeQuests();
+            InitializeQuestWeights();
+            SetupWatch();
+            UpdateWatchText();
             PhotonNetwork.NetworkingClient.EventReceived += EventReceived;
             gtmanager = GameObject.Find("GT Systems/GameModeSystem/Gorilla Tag Manager").GetComponent<GorillaTagManager>();
             LoadQuestProgress();
@@ -1102,6 +1552,7 @@ namespace Gorilla_Quests
                 expertParticle.GetComponent<ParticleSystem>().Play();
             }
             CheckAndStartCountQuest();
+            
         }
 
         private void SetParticlePosition(GameObject particle, Transform parent)
@@ -1139,26 +1590,57 @@ namespace Gorilla_Quests
         {
             selectedQuests.Clear();
             var random = new System.Random();
-            var randomQuests = quests
-                .Where(q => !selectedQuests.Contains(q))
-                .OrderBy(q => random.Next())
-                .Take(3);
 
-            selectedQuests.AddRange(randomQuests);
-            var randomAdvancedQuests = advancedQuests
-                .Where(q => !selectedQuests.Contains(q))
-                .OrderBy(q => random.Next())
-                .Take(3);
 
-            selectedQuests.AddRange(randomAdvancedQuests);
+            Quest SelectWeightedQuest(Dictionary<Quest, int> questWeightDict, List<Quest> questList)
+            {
+                int totalWeight = questList.Sum(q => questWeightDict[q]);
+                int randomNumber = random.Next(0, totalWeight);
+                int cumulativeWeight = 0;
+
+                foreach (var quest in questList)
+                {
+                    cumulativeWeight += questWeightDict[quest];
+                    if (randomNumber < cumulativeWeight)
+                    {
+                        return quest;
+                    }
+                }
+
+                return null;
+            }
+
+            while (selectedQuests.Count < 3)
+            {
+                var quest = SelectWeightedQuest(questWeights, quests);
+                if (quest != null && !selectedQuests.Contains(quest))
+                {
+                    selectedQuests.Add(quest);
+                }
+            }
+
+
+            while (selectedQuests.Count < 6)
+            {
+                var quest = SelectWeightedQuest(advancedQuestWeights, advancedQuests);
+                if (quest != null && !selectedQuests.Contains(quest))
+                {
+                    selectedQuests.Add(quest);
+                }
+            }
+
             int expertQuestCount = random.Next(1, 3);
-            var randomExpertQuests = expertQuests
-                .Where(q => !selectedQuests.Contains(q))
-                .OrderBy(q => random.Next())
-                .Take(expertQuestCount);
-
-            selectedQuests.AddRange(randomExpertQuests);
+            while (selectedQuests.Count < 6 + expertQuestCount)
+            {
+                var quest = SelectWeightedQuest(expertQuestWeights, expertQuests);
+                if (quest != null && !selectedQuests.Contains(quest))
+                {
+                    selectedQuests.Add(quest);
+                }
+            }
         }
+
+
         private void IncrementProgress(int amount, Quest quest)
         {
             quest.Progress += amount;
@@ -1184,6 +1666,57 @@ namespace Gorilla_Quests
             {
                 CompleteQuest(quest, DetermineQuestType(quest));
             }
+        }
+
+        private Dictionary<Quest, int> questWeights = new Dictionary<Quest, int>();
+        private Dictionary<Quest, int> advancedQuestWeights = new Dictionary<Quest, int>();
+        private Dictionary<Quest, int> expertQuestWeights = new Dictionary<Quest, int>();
+
+        private void InitializeQuestWeights()
+        {
+
+            foreach (var quest in quests)
+            {
+                questWeights[quest] = GetWeightForQuest(quest);
+            }
+
+   
+            foreach (var quest in advancedQuests)
+            {
+                advancedQuestWeights[quest] = GetWeightForAdvancedQuest(quest);
+            }
+
+            foreach (var quest in expertQuests)
+            {
+                expertQuestWeights[quest] = GetWeightForExpertQuest(quest);
+            }
+        }
+
+        private int GetWeightForQuest(Quest quest)
+        {
+            if (quest.Map)
+            {
+                return 1;
+            }
+            return 10;
+        }
+
+        private int GetWeightForAdvancedQuest(Quest quest)
+        {
+            if (quest.Map)
+            {
+                return 1;
+            }
+            return 10;
+        }
+
+        private int GetWeightForExpertQuest(Quest quest)
+        {
+            if (quest.Map)
+            {
+                return 1;
+            }
+            return 10;
         }
 
 
@@ -1221,11 +1754,11 @@ namespace Gorilla_Quests
                 switch (Type)
                 {
                     case QuestTypeCooldown.Normal:
-                        return TimeSpan.FromSeconds(3);
+                        return TimeSpan.FromSeconds(5);
                     case QuestTypeCooldown.Advanced:
-                        return TimeSpan.FromSeconds(3);
+                        return TimeSpan.FromSeconds(10);
                     case QuestTypeCooldown.Expert:
-                        return TimeSpan.FromSeconds(3);
+                        return TimeSpan.FromSeconds(15);
                     default:
                         return TimeSpan.Zero;
                 }
@@ -1240,7 +1773,7 @@ namespace Gorilla_Quests
         public bool IsOnCooldown { get; set; }
         public void ResetCooldown()
         {
-            IsOnCooldown = false; 
+            IsOnCooldown = false;
         }
         public Quest(string name, int goal, int xp, bool count, bool roomtrigger, bool gamemode, string gamemodename, bool map, string mapname, bool queue, string queuename, QuestTypeCooldown questtype)
         {
