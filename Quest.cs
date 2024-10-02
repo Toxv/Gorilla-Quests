@@ -298,8 +298,8 @@ namespace Gorilla_Quests
             var currentqueuestring = GorillaComputer.instance.currentQueue;
             return currentqueuestring;
         }
-        private float timeSpentInMap = 0f; // Variable to track time spent in the quest map
-        private float timeCheckInterval = 1f; // Time interval to check progress (1 minute)
+        private float timeSpentInMap = 0f;
+        private float timeCheckInterval = 1f; 
         private Coroutine timeTrackingCoroutine;
         private PropertyInfo[] boolProperties = typeof(Quest).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(prop => prop.PropertyType == typeof(bool))
@@ -308,38 +308,28 @@ namespace Gorilla_Quests
         {
             while (true)
             {
-                yield return new WaitForSeconds(1f); // Wait for 1 second
+                yield return new WaitForSeconds(1f);
                 if (quest.Map)
                 {
                     string mapName = quest.Mapname.ToUpper();
                     string currentMap = FormatMap(MapPatch.ActiveZones.First().ToString().ToUpper());
-
-                    // If the player is in the correct map
                     if (mapName.Equals(currentMap, StringComparison.OrdinalIgnoreCase))
                     {
-                        timeSpentInMap += 1f; // Increment time spent in the map
+                        timeSpentInMap += 1f; 
                         Debug.Log($"Time spent in quest map '{mapName}': {timeSpentInMap} seconds");
-
-                        // Check if the required time (1 minute) has been spent in the map
                         if (timeSpentInMap >= timeCheckInterval)
                         {
-                            // Increment progress based on time spent
-                            IncrementProgress(1, quest); // Increment progress by 1 for each minute
-
-                            // Check player count for quest completion
+                            IncrementProgress(1, quest);
                             if (PhotonNetwork.CurrentRoom.PlayerCount < 3)
                             {
-                                CompleteQuest(quest, DetermineQuestType(quest)); // Implement your quest completion logic here
+                                CompleteQuest(quest, DetermineQuestType(quest));
                                 Debug.Log($"Quest completed due to player count < 3: {quest.Name}");
                             }
-
-                            // Reset the timer for the next interval
-                            timeSpentInMap = 0f; // Reset for the next minute
+                            timeSpentInMap = 0f; 
                         }
                     }
                     else
                     {
-                        // Reset time tracking if not in the correct map
                         timeSpentInMap = 0f;
                         Debug.Log($"Exited quest map. Time tracking reset for '{mapName}'.");
                     }
@@ -399,7 +389,7 @@ namespace Gorilla_Quests
                     }
                     if (quest.Count)
                     {
-                        int progressIncrement = 0; // Variable to track the progress increment
+                        int progressIncrement = 0; 
                         if (quest.Map && quest.Gamemode)
                         {
                             string requiredGamemode = quest.GamemodeName.ToUpper();
@@ -411,9 +401,9 @@ namespace Gorilla_Quests
                             if (mapName.Equals(currentMap2, StringComparison.OrdinalIgnoreCase) &&
                                 requiredGamemode.Equals(currentGamemode, StringComparison.OrdinalIgnoreCase))
                             {
-                                if (timeTrackingCoroutine == null) // Ensure the timer is not already running
+                                if (timeTrackingCoroutine == null) 
                                 {
-                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest)); // Start tracking time
+                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest)); 
                                 }
                                 Debug.Log($"Both map and gamemode requirements met for quest: {quest.Name}");
                             }
@@ -429,9 +419,9 @@ namespace Gorilla_Quests
 
                             if (mapName.Equals(currentMap3, StringComparison.OrdinalIgnoreCase))
                             {
-                                if (timeTrackingCoroutine == null) // Ensure the timer is not already running
+                                if (timeTrackingCoroutine == null) 
                                 {
-                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest)); // Start tracking time
+                                    timeTrackingCoroutine = StartCoroutine(TrackTimeInMap(quest));
                                 }
                                 Debug.Log($"Map requirement met for quest: {quest.Name}");
                             }
@@ -1195,16 +1185,16 @@ namespace Gorilla_Quests
             if (q == null)
             {
                 Debug.LogWarning("Encountered a null quest in selectedQuests.");
-                return false; // Skip null quests
+                return false;
             }
 
-            // Return true if Count is true
-            return q.Count; // Assuming Count is a boolean
+           
+            return q.Count; 
         }).ToList();
 
         foreach (var quest in questsWithCount)
         {
-            if (quest != null) // Double-check quest is not null before starting the coroutine
+            if (quest != null) 
             {
                 StartCoroutine(CountUpQuestProgress(quest));
             }
@@ -1303,7 +1293,7 @@ namespace Gorilla_Quests
             selectedQuests.Clear();
             var random = new System.Random();
 
-            // Weighted random selection function
+
             Quest SelectWeightedQuest(Dictionary<Quest, int> questWeightDict, List<Quest> questList)
             {
                 int totalWeight = questList.Sum(q => questWeightDict[q]);
@@ -1319,10 +1309,9 @@ namespace Gorilla_Quests
                     }
                 }
 
-                return null; // Should never reach here if weights are positive
+                return null; 
             }
 
-            // Select 3 weighted normal quests
             while (selectedQuests.Count < 3)
             {
                 var quest = SelectWeightedQuest(questWeights, quests);
@@ -1332,8 +1321,8 @@ namespace Gorilla_Quests
                 }
             }
 
-            // Select 3 weighted advanced quests
-            while (selectedQuests.Count < 6) // Now total 6 including normal quests
+
+            while (selectedQuests.Count < 6)
             {
                 var quest = SelectWeightedQuest(advancedQuestWeights, advancedQuests);
                 if (quest != null && !selectedQuests.Contains(quest))
@@ -1342,9 +1331,8 @@ namespace Gorilla_Quests
                 }
             }
 
-            // Select 1-2 weighted expert quests
-            int expertQuestCount = random.Next(1, 3); // Randomly choose between 1 and 2
-            while (selectedQuests.Count < 6 + expertQuestCount) // Ensure the total is 6 (normal + advanced) + 1 or 2 expert
+            int expertQuestCount = random.Next(1, 3); 
+            while (selectedQuests.Count < 6 + expertQuestCount)
             {
                 var quest = SelectWeightedQuest(expertQuestWeights, expertQuests);
                 if (quest != null && !selectedQuests.Contains(quest))
@@ -1381,51 +1369,48 @@ namespace Gorilla_Quests
                 CompleteQuest(quest, DetermineQuestType(quest));
             }
         }
-        // Dictionary to store quest weights
+
         private Dictionary<Quest, int> questWeights = new Dictionary<Quest, int>();
         private Dictionary<Quest, int> advancedQuestWeights = new Dictionary<Quest, int>();
         private Dictionary<Quest, int> expertQuestWeights = new Dictionary<Quest, int>();
 
-        // Example setup for weights based on whether a quest is map-based or not
         private void InitializeQuestWeights()
         {
-            // Normal quest weights
+
             foreach (var quest in quests)
             {
-                questWeights[quest] = GetWeightForQuest(quest); // Assign weight dynamically
+                questWeights[quest] = GetWeightForQuest(quest);
             }
 
             // Advanced quest weights
             foreach (var quest in advancedQuests)
             {
-                advancedQuestWeights[quest] = GetWeightForAdvancedQuest(quest); // Assign weight dynamically
+                advancedQuestWeights[quest] = GetWeightForAdvancedQuest(quest);
             }
 
             // Expert quest weights
             foreach (var quest in expertQuests)
             {
-                expertQuestWeights[quest] = GetWeightForExpertQuest(quest); // Assign weight dynamically
+                expertQuestWeights[quest] = GetWeightForExpertQuest(quest);
             }
         }
 
-        // Function to calculate the weight of a normal quest
         private int GetWeightForQuest(Quest quest)
         {
             if (quest.Map)
             {
-                return 1; // Lower weight for map-based quests
+                return 1; 
             }
-            return 10; // Higher weight for non-map-based quests
+            return 10; 
         }
 
-        // Function to calculate the weight of an advanced quest
         private int GetWeightForAdvancedQuest(Quest quest)
         {
             if (quest.Map)
             {
-                return 1; // Lower weight for map-based advanced quests
+                return 1;
             }
-            return 10; // Higher weight for non-map-based advanced quests
+            return 10;
         }
 
         private int GetWeightForExpertQuest(Quest quest)
