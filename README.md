@@ -9,7 +9,7 @@
 
 ### 🚀 **Features**
 
-- 🏆 **30+ Unique Quests**: From simple challenges to mind-bending obstacles, the quests are divided into three types:
+- 🏆 **45+ Unique Quests**: From simple challenges to mind-bending obstacles, the quests are divided into three types:
   - **Normal**: For casual players or those just starting out in Gorilla Tag.
   - **Advanced**: Mid-tier quests that add new mechanics and greater difficulty.
   - **Expert**: The ultimate challenges that only the best can complete! 
